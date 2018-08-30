@@ -11,6 +11,7 @@ export default new vuex.Store({
   state: {
     user: {},
     blogs: [],
+    myBlogs: [],
     activeBlog: {}
   },
   mutations: {
@@ -20,14 +21,68 @@ export default new vuex.Store({
     setBlogs(state, blogs) {
       state.blogs = blogs;
     },
-    setActiveBlog(state, blog){
-        state.activeBlog = 
+    setMyBlogs(state, blogs) {
+      state.myBlogs = blogs;
+    },
+    setActiveBlog(state, blog) {
+      state.activeBlog = blog;
     }
   },
-
   actions: {
+    //#region Blogs
+    createBlog({ commit, dispatch }, newBlog) {
+      db.collection("blogs")
+        .add(newBlog)
+        .then(doc => {
+          console.log("Created Blog with ID: ", doc.id);
+          dispatch("getBlogs");
+        });
+    },
+    getBlogs({ commit, dispatch }) {
+      db.collection("blogs")
+        .get()
+        .then(querySnapShot => {
+          let blogs = [];
+          querySnapShot.forEach(doc => {
+            if (doc.exists) {
+              let blog = doc.data();
+              blog.id = doc.id;
+              blogs.push(blog);
+            }
+          });
+          commit("setBlogs", blogs);
+        });
+    },
+    getMyBlogs({ state, commit, dispatch }) {
+      db.collection("blogs")
+        .where("author", "==", state.user.email)
+        .get()
+        .then(querySnapShot => {
+          let blogs = [];
+          querySnapShot.forEach(doc => {
+            if (doc.exists) {
+              let blog = doc.data();
+              blog.id = doc.id;
+              blogs.push(blog);
+            }
+          });
+          commit("setMyBlogs", blogs);
+        });
+    },
+    getBlog({ commit, dispatch }, blogId) {
+      db.collection("blogs")
+        .doc(blogId)
+        .get()
+        .then(doc => {
+          let blog = doc.data();
+          blog.id = doc.id;
+          commit("setActiveBlog", blog);
+        });
+    },
+    //#endregion
+    //#region Auth
     register({ commit, dispatch }, newUser) {
-      firebaseauth
+      firebase
         .auth()
         .createUserWithEmailAndPassword(newUser.email, newUser.password)
         .then(res => {
@@ -39,9 +94,9 @@ export default new vuex.Store({
         });
     },
     login({ commit, dispatch }, creds) {
-      firebaseauth
+      firebase
         .auth()
-        .signInWithEmailAndPassword(newUser.email, newUser.password)
+        .signInWithEmailAndPassword(creds.email, creds.password)
         .then(res => {
           commit("setUser", res.user);
           router.push({ name: "Dashboard" });
@@ -50,11 +105,12 @@ export default new vuex.Store({
           console.error(err);
         });
     },
-    authenticate(commit, dispatch) {
+    authenticate({ commit, dispatch }) {
       firebase.auth().onAuthStateChanged(user => {
         if (user) {
           commit("setUser", user);
-          router.push({ name: "Dashboard" });
+          dispatch("getMyBlogs");
+          // router.push({ name: 'Dashboard' })
         } else {
           commit("setUser", {});
           router.push({ name: "Login" });
@@ -72,39 +128,7 @@ export default new vuex.Store({
         .catch(err => {
           console.error(err);
         });
-    },
-
-    createBlog(commit, dispatch, newBlog) {
-      db.collection("blogs")
-        .add(newBlog)
-        .then(doc => {
-          console.log("created Blog with id:", doc.id);
-          dispatch("getBlogs");
-        });
-    },
-
-    getBlogs(commit, dispatch) {
-      db.collection("blogs")
-        .get()
-        .then(querySnapShot => {
-          let blogs = [];
-          querySnapShot.forEach(doc => {
-            if (doc.exists) {
-              let blog = doc.data();
-              blog.id = doc.id;
-              blogs.push(blog);
-            }
-          });
-          commit("setBlogs", blogs);
-        });
-    }, 
-getBlog({commit, dispatch}, blogId){
-    db.collection('blogs').doc(blogId).get().then(doc =>{
-        let blog = doc.data()
-        blog.id = doc.id
-        commit('setActiveBlog', blog)
-    })
-}
-
+    }
+    //#endregion
   }
 });
